@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  primary:
+    image: postgres:15
+    container_name: pg-primary
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ICUI4CUAlways
+      REPL_PASSWORD: ICUI4CUAlways
+    ports:
+      - "0.0.0.0:5432:5432"
+    volumes:
+      - ./primary/data:/var/lib/postgresql/data
+      - ./primary/initdb:/docker-entrypoint-initdb.d
+    command: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10", "-c", "wal_keep_size=64MB", "-c", "listen_addresses=*"]
+    networks:
+      - pg-net
+
+  replica:
+    image: postgres:15
+    container_name: pg-replica
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ICUI4CUAlways
+      REPL_PASSWORD: ICUI4CUAlways
+    depends_on:
+      - primary
+    ports:
+      - "0.0.0.0:5433:5432"
+    volumes:
+      - ./replica/data:/var/lib/postgresql/data
+      - ./replica/replica-entrypoint.sh:/usr/local/bin/replica-entrypoint.sh
+    entrypoint: ["/usr/local/bin/replica-entrypoint.sh"]
+    networks:
+      - pg-net
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: web-portal
+    ports:
+      - "0.0.0.0:3000:3000"
+    depends_on:
+      - primary
+      - replica
+    networks:
+      - pg-net
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3000
+
+networks:
+  pg-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.10.0/24
